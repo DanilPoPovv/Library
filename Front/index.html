@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Library — simple frontend</title>
+  <style>
+    :root{font-family:Inter,"Segoe UI",Roboto,Arial;--bg:#f6f8fa;--card:#fff;--accent:#3b82f6;--muted:#6b7280}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:#0f172a}
+    header{background:var(--card);padding:12px 18px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 4px rgba(15,23,42,.06);position:sticky;top:0;z-index:5}
+    .brand{font-weight:700}
+    nav button{margin-left:8px;padding:8px 12px;border-radius:8px;border:1px solid transparent;background:transparent;cursor:pointer}
+    .btn{background:var(--accent);color:white;border:none;padding:8px 12px;border-radius:8px;cursor:pointer}
+    .container{max-width:1000px;margin:20px auto;padding:0 16px}
+    .grid{display:grid;grid-template-columns:1fr 340px;gap:18px}
+    .card{background:var(--card);padding:14px;border-radius:12px;box-shadow:0 6px 20px rgba(2,6,23,.04)}
+    .book-list{display:grid;gap:10px}
+    .book{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:8px;border:1px solid rgba(15,23,42,.04)}
+    .muted{color:var(--muted);font-size:14px}
+    .small{font-size:13px;color:var(--muted)}
+    pre.token{white-space:nowrap;overflow:auto;background:#0b1220;color:#d1e8ff;padding:8px;border-radius:6px}
+    .hidden{display:none!important}
+    footer{margin:30px 0;text-align:center;color:var(--muted)}
+    .danger{background:#fee2e2;color:#991b1b;border:1px solid #fecaca;padding:8px;border-radius:8px}
+    .roles-badge{background:#eaf2ff;color:#064e9c;padding:4px 8px;border-radius:999px;font-size:12px}
+    .modal{position:fixed;inset:0;background:rgba(2,6,23,.5);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
+    .modal .card{max-width:100%;width:420px}
+    .form{display:block}
+    .form-row{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+    .form-row label{width:120px;text-align:right;font-weight:500;color:var(--muted);font-size:14px}
+    .form-row input,.form-row select,.form-row textarea{flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9;background:#fff;font-size:14px}
+    @media (max-width:560px){.grid{grid-template-columns:1fr}.form-row{flex-direction:column;align-items:stretch}.form-row label{width:auto;text-align:left;margin-bottom:6px}}
+    #issue-book-panel{background:var(--card);padding:12px 16px;border-radius:12px;box-shadow:0 4px 12px rgba(2,6,23,0.08);margin-top:12px}
+    #issue-book-panel h4{margin:0 0 8px 0;color:#064e9c}
+    #issue-user-select{width:100%;padding:10px;border-radius:8px;border:1px solid #e6eef9;background:#fff}
+    #issue-confirm-btn{display:block;width:100%;padding:10px 0;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer}
+    #issue-confirm-btn:disabled{background:#a0c4ff;cursor:not-allowed}
+    #book-actions .btn, #book-actions .danger { margin-left:8px }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">Library UI — курсовая</div>
+    <nav>
+      <span id="user-info" class="small muted">Не авторизован</span>
+      <button id="btn-login" class="btn">Войти</button>
+      <button id="btn-register" style="margin-left:8px">Регистрация</button>
+      <button id="btn-logout" class="hidden">Выйти</button>
+    </nav>
+  </header>
+
+  <div class="container">
+    <div class="grid">
+      <main class="card">
+        <h3>Книги</h3>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
+          <input id="search" placeholder="Поиск по названию или автору" style="flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+          <button id="refresh" class="btn">Обновить</button>
+        </div>
+        <div id="books" class="book-list"></div>
+      </main>
+
+      <aside class="card">
+        <div id="panel-unauth">
+          <h4>Войти или зарегистрироваться</h4>
+          <p class="small muted">Чтобы создавать, редактировать или выдавать книги, войдите под пользователем с ролью <strong>Admin</strong> или <strong>Librarian</strong>.</p>
+        </div>
+
+        <div id="panel-auth" class="hidden">
+          <h4>Аккаунт</h4>
+          <div><strong id="account-name"></strong> <span id="account-roles" class="roles-badge" style="margin-left:8px"></span></div>
+          <div style="margin-top:10px"><button id="btn-show-create" class="btn admin-only">Добавить книгу</button></div>
+          <div style="margin-top:12px">
+            <details><summary>Токен (для отладки)</summary><pre id="token-pre" class="token"></pre></details>
+          </div>
+        </div>
+
+        <hr style="margin:12px 0" />
+
+        <div id="create-book" class="hidden">
+          <h4 id="create-title">Добавить книгу</h4>
+          <form id="form-book" class="form">
+            <div class="form-row"><label for="book-title">Название</label><input id="book-title" name="Title" required /></div>
+            <div class="form-row"><label for="book-author">Автор</label><input id="book-author" name="Author" required /></div>
+            <div class="form-row"><label for="book-genre">Жанр</label><input id="book-genre" name="Genre" /></div>
+            <div class="form-row"><label for="book-year">Год</label><input id="book-year" name="Year" type="number" /></div>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button type="submit" class="btn">Сохранить</button>
+              <button type="button" id="btn-cancel-book">Отменить</button>
+            </div>
+          </form>
+        </div>
+
+        <div id="loans-panel" style="margin-top:14px">
+          <h4>Управление займами (Admin/Librarian)</h4>
+          <form id="form-issue" class="form" style="display:block">
+            <div class="form-row"><label for="loan-userid">userId</label><input id="loan-userid" name="UserId" type="number" /></div>
+            <div class="form-row"><label for="loan-copyid">bookCopyId</label><input id="loan-copyid" name="BookCopyId" type="number" /></div>
+            <div style="display:flex;gap:8px">
+              <button id="btn-issue" type="button" class="btn">Выдать</button>
+            </div>
+          </form>
+        </div>
+      </aside>
+    </div>
+
+    <div id="details-modal" class="card hidden" style="margin-top:18px">
+      <h4 id="book-h-title"></h4>
+      <div class="muted" id="book-h-author"></div>
+      <p style="margin-top:8px" id="book-h-genre"></p>
+
+      <div id="book-actions" style="margin-top:10px"></div>
+
+      <div id="issue-book-panel" class="hidden" style="margin-top:12px">
+        <h4>Выдать книгу</h4>
+        <select id="issue-user-select" style="width:100%;padding:8px;border-radius:8px;margin-bottom:8px">
+          <option value="">Выберите пользователя</option>
+        </select>
+        <button id="issue-confirm-btn" class="btn" disabled>Выдать</button>
+      </div>
+    </div>
+
+    <footer></footer>
+  </div>
+
+  <!-- модалки -->
+  <div id="modal-login" class="modal hidden" aria-hidden="true">
+    <div class="card" style="width:360px">
+      <h3>Войти</h3>
+      <form id="form-login" class="form">
+        <div class="form-row"><label for="login-name">Имя</label><input id="login-name" name="Name" required /></div>
+        <div class="form-row"><label for="login-pass">Пароль</label><input id="login-pass" name="Password" type="password" required /></div>
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="btn" type="submit">Войти</button><button type="button" id="close-login">Отмена</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-register" class="modal hidden" aria-hidden="true">
+    <div class="card" style="width:420px">
+      <h3>Регистрация</h3>
+      <form id="form-register" class="form">
+        <div class="form-row"><label for="reg-name">Имя</label><input id="reg-name" name="Name" required /></div>
+        <div class="form-row"><label for="reg-pass">Пароль</label><input id="reg-pass" name="Password" type="password" required /></div>
+        <div class="form-row"><label for="reg-email">Email</label><input id="reg-email" name="Email" type="email" /></div>
+        <div class="form-row"><label for="reg-role">Роль</label>
+          <select id="reg-role" name="Role"><option value="1">Admin</option><option value="2">Librarian</option><option value="3">Reader</option></select>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="btn" type="submit">Зарегистрировать</button><button type="button" id="close-register">Отмена</button></div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'https://localhost:7156';
+
+    // --- apiFetch ---
+    async function apiFetch(path, opts = {}) {
+      const headers = opts.headers || {};
+      headers['Content-Type'] = 'application/json';
+      const token = localStorage.getItem('jwt_token');
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+
+      const res = await fetch(API_BASE + path, {...opts, headers});
+      const text = await res.text();
+      let json = null;
+      try { json = text ? JSON.parse(text) : null; } catch(e) { json = text; }
+
+      if (!res.ok) {
+        const payload = json || text || res.statusText;
+        const err = { status: res.status, payload };
+        if (res.status === 403) handleForbidden();
+        throw err;
+      }
+      return json;
+    }
+
+    function handleForbidden() {
+      console.warn('403 — hiding admin UI');
+      document.querySelectorAll('.admin-only').forEach(e => e.classList.add('hidden'));
+      document.getElementById('btn-show-create')?.classList.add('hidden');
+    }
+
+    // --- JWT / roles / userId helpers ---
+    function decodeJwt(token) {
+      if (!token) return null;
+      try {
+        const payload = token.split('.')[1];
+        const json = atob(payload.replace(/-/g,'+').replace(/_/g,'/'));
+        return JSON.parse(decodeURIComponent(escape(json)));
+      } catch { return null; }
+    }
+
+    function getRoleFromToken() {
+      const token = localStorage.getItem('jwt_token');
+      if (!token) return null;
+      const p = decodeJwt(token);
+      if (!p) return null;
+      return p["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] || p.role || p.roles;
+    }
+
+    function getUserIdFromToken() {
+      const token = localStorage.getItem('jwt_token');
+      if (!token) return null;
+      const p = decodeJwt(token);
+      if (!p) return null;
+      return p["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"] || p.nameid || p.sub;
+    }
+
+    function hasRole(role) {
+      const r = getRoleFromToken();
+      if (!r) return false;
+      if (Array.isArray(r)) return r.includes(role);
+      return String(r) === String(role);
+    }
+
+    // --- DOM refs ---
+    const btnLogin = document.getElementById('btn-login');
+    const btnRegister = document.getElementById('btn-register');
+    const btnLogout = document.getElementById('btn-logout');
+    const userInfo = document.getElementById('user-info');
+    const panelAuth = document.getElementById('panel-auth');
+    const panelUnauth = document.getElementById('panel-unauth');
+    const accountName = document.getElementById('account-name');
+    const accountRoles = document.getElementById('account-roles');
+    const tokenPre = document.getElementById('token-pre');
+
+    const modalLogin = document.getElementById('modal-login');
+    const modalRegister = document.getElementById('modal-register');
+    const formLogin = document.getElementById('form-login');
+    const formRegister = document.getElementById('form-register');
+
+    const booksDiv = document.getElementById('books');
+    const refreshBtn = document.getElementById('refresh');
+    const searchInput = document.getElementById('search');
+
+    const panelCreate = document.getElementById('create-book');
+    const btnShowCreate = document.getElementById('btn-show-create');
+    const formBook = document.getElementById('form-book');
+    const btnCancelBook = document.getElementById('btn-cancel-book');
+    const createTitle = document.getElementById('create-title');
+
+    const detailsModal = document.getElementById('details-modal');
+    const bookHTitle = document.getElementById('book-h-title');
+    const bookHAuthor = document.getElementById('book-h-author');
+    const bookHGenre = document.getElementById('book-h-genre');
+    const bookActions = document.getElementById('book-actions');
+
+    const issuePanel = document.getElementById('issue-book-panel');
+    const userSelect = document.getElementById('issue-user-select');
+    const issueConfirmBtn = document.getElementById('issue-confirm-btn');
+
+    const closeLogin = document.getElementById('close-login');
+    const closeRegister = document.getElementById('close-register');
+
+    // state
+    let books = [];
+    let userBookIds = []; // IDs книг, которые взял текущий (Reader)
+    let editingBookId = null;
+    let cachedUsers = null;
+
+    // --- refresh UI based on auth ---
+    function refreshAuthUI() {
+      const token = localStorage.getItem('jwt_token');
+      if (token) {
+        const p = decodeJwt(token);
+        const name = p && (p.unique_name || p.name || p.sub) ? (p.unique_name || p.name || p.sub) : 'user';
+        const roleVal = getRoleFromToken();
+        accountName.textContent = name;
+        accountRoles.textContent = roleVal || 'User';
+        tokenPre.textContent = token;
+        userInfo.textContent = name;
+        panelAuth.classList.remove('hidden');
+        panelUnauth.classList.add('hidden');
+        btnLogin.classList.add('hidden'); btnRegister.classList.add('hidden'); btnLogout.classList.remove('hidden');
+      } else {
+        accountName.textContent = ''; accountRoles.textContent = ''; tokenPre.textContent = '';
+        userInfo.textContent = 'Не авторизован';
+        panelAuth.classList.add('hidden'); panelUnauth.classList.remove('hidden');
+        btnLogin.classList.remove('hidden'); btnRegister.classList.remove('hidden'); btnLogout.classList.add('hidden');
+      }
+
+      // admin-only toggles
+      document.querySelectorAll('.admin-only').forEach(el => {
+        if (hasRole('Admin') || hasRole('Librarian')) el.classList.remove('hidden'); else el.classList.add('hidden');
+      });
+      if (hasRole('Admin') || hasRole('Librarian')) btnShowCreate.classList.remove('hidden'); else btnShowCreate.classList.add('hidden');
+    }
+
+    // --- load user's books (uses endpoint /api/books/user/{userId}) ---
+    async function loadUserBooks() {
+      const userId = getUserIdFromToken();
+      if (!userId) {
+        userBookIds = [];
+        books = [];
+        renderBooks();
+        return;
+      }
+
+      try {
+        // NOTE: replace path if your backend route differs
+        const data = await apiFetch(`/api/books/user/${userId}`);
+        const arr = Array.isArray(data) ? data : [];
+        userBookIds = arr.map(b => b.id);
+        books = arr; // show only user's books in the main list
+        renderBooks();
+      } catch (err) {
+        console.error('loadUserBooks error', err);
+        userBookIds = [];
+        books = [];
+        renderBooks();
+      }
+    }
+
+    // --- load all books (for admin/librarian or anonymous) ---
+    async function loadBooks() {
+      booksDiv.innerHTML = '<div class="small muted">Загрузка...</div>';
+      try {
+        const data = await apiFetch('/api/books');
+        books = Array.isArray(data) ? data : [];
+        renderBooks();
+      } catch (e) {
+        const msg = (e && e.payload) ? (e.payload.title || JSON.stringify(e.payload)) : (e.message || JSON.stringify(e));
+        booksDiv.innerHTML = `<div class="small muted">Ошибка при загрузке: ${escapeHtml(msg)}</div>`;
+      }
+    }
+
+    // --- render books ---
+    function renderBooks() {
+      const q = searchInput.value.trim().toLowerCase();
+      const filtered = books.filter(b => {
+        if (!q) return true;
+        return (b.title && b.title.toLowerCase().includes(q)) || (b.author && b.author.toLowerCase().includes(q));
+      });
+
+      if (!filtered.length) { booksDiv.innerHTML = `<div class="small muted">Книги не найдены.</div>`; return; }
+
+      booksDiv.innerHTML = '';
+      filtered.forEach(b => {
+        const isLoanedByUser = userBookIds.includes(b.id);
+        const el = document.createElement('div');
+        el.className = 'book';
+        el.innerHTML = `
+          <div>
+            <div style="font-weight:600">${escapeHtml(b.title || b.name || '—')}</div>
+            <div class="muted">${escapeHtml(b.author || '')}</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <div class="muted small">${b.year || ''}</div>
+            <button data-id="${b.id}" class="btn btn-view">Открыть</button>
+            ${isLoanedByUser ? `<button data-id="${b.id}" class="btn btn-return">Вернуть</button>` : ''}
+          </div>
+        `;
+        booksDiv.appendChild(el);
+      });
+
+      // attach handlers
+      document.querySelectorAll('.btn-view').forEach(btn => {
+        btn.addEventListener('click', () => showBookDetails(parseInt(btn.getAttribute('data-id'))));
+      });
+
+      document.querySelectorAll('.btn-return').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = parseInt(btn.getAttribute('data-id'),10);
+          if (!id) return alert('Ошибка: отсутствует ID книги');
+          try {
+            await apiFetch('/api/loans/return', { method:'POST', body: JSON.stringify({ BookId: id, UserId : getUserIdFromToken() }) });
+            console.log(id, getUserIdFromToken());
+            alert('Книга возвращена');
+            // обновляем список (если Reader — только свои; иначе все)
+            if (hasRole('Reader')) await loadUserBooks(); else await loadBooks();
+          } catch (err) {
+            const msg = (err && err.payload) ? (err.payload.title || JSON.stringify(err.payload)) : (err.message || JSON.stringify(err));
+            alert('Ошибка возврата: ' + msg);
+          }
+        });
+      });
+    }
+
+    // --- details & actions (existing) ---
+    async function showBookDetails(id) {
+      try {
+        const b = await apiFetch('/api/books/' + id);
+        bookHTitle.textContent = b.title || b.name || '—';
+        bookHAuthor.textContent = 'Автор: ' + (b.author || '—') + ' • ' + (b.genre || '—');
+        bookHGenre.textContent = 'Год: ' + (b.year || '—');
+        bookActions.innerHTML = '';
+
+        if (hasRole('Admin') || hasRole('Librarian')) {
+          const input = document.createElement('input');
+          input.type = 'number'; input.min = 1; input.placeholder = 'Кол-во копий'; input.style.width = '120px';
+          const addBtn = document.createElement('button'); addBtn.className = 'btn admin-only'; addBtn.textContent = 'Добавить копии';
+          addBtn.addEventListener('click', async () => {
+            const count = parseInt(input.value,10);
+            if (!count || count <= 0) return alert('Введите количество > 0');
+            try {
+              await apiFetch(`/api/books/${b.id}/copies`, { method:'POST', body: JSON.stringify({ Count: count }) });
+              alert('Копии добавлены');
+              // refresh lists
+              if (hasRole('Reader')) await loadUserBooks(); else await loadBooks();
+            } catch (err) { alert('Ошибка: ' + ((err && err.payload) ? JSON.stringify(err.payload) : (err.message || JSON.stringify(err)))); }
+          });
+          bookActions.appendChild(input);
+          bookActions.appendChild(addBtn);
+        }
+
+        if (localStorage.getItem('jwt_token')) {
+          const editBtn = document.createElement('button'); editBtn.className = 'btn'; editBtn.textContent = 'Редактировать';
+          editBtn.addEventListener('click', () => openEditBook(b));
+          bookActions.appendChild(editBtn);
+        }
+
+        if (hasRole('Admin')) {
+          const delBtn = document.createElement('button'); delBtn.className = 'danger admin-only'; delBtn.textContent = 'Удалить';
+          delBtn.addEventListener('click', async () => {
+            if (!confirm('Удалить книгу?')) return;
+            try {
+              await apiFetch(`/api/books/${b.id}`, { method:'DELETE' });
+              alert('Книга удалена');
+              detailsModal.classList.add('hidden');
+              if (hasRole('Reader')) await loadUserBooks(); else await loadBooks();
+            } catch (err) { alert('Ошибка удаления: ' + ((err && err.payload) ? JSON.stringify(err.payload) : (err.message || JSON.stringify(err)))); }
+          });
+          bookActions.appendChild(delBtn);
+        }
+
+        if (hasRole('Admin') || hasRole('Librarian')) {
+          issuePanel.classList.remove('hidden');
+          issueConfirmBtn.disabled = true;
+          userSelect.innerHTML = `<option value="">Загрузка пользователей...</option>`;
+          try {
+            let users = cachedUsers;
+            if (!users) {
+              users = await apiFetch('/api/users');
+              cachedUsers = users;
+            }
+            userSelect.innerHTML = (!users || users.length === 0) ? '<option value="">Пользователи не найдены</option>' : ('<option value="">Выберите пользователя</option>' + users.map(u => `<option value="${u.id}">${escapeHtml(u.name || u.email || ('#' + u.id))}</option>`).join(''));
+          } catch {
+            userSelect.innerHTML = '<option value="">Ошибка загрузки пользователей</option>';
+          }
+
+          userSelect.onchange = () => { issueConfirmBtn.disabled = !userSelect.value; };
+          issueConfirmBtn.onclick = async () => {
+            if (!userSelect.value) return alert('Выберите пользователя');
+            const payload = { UserId: parseInt(userSelect.value,10), BookCopyId: id };
+            try {
+              await apiFetch('/api/loans/issue', { method:'POST', body: JSON.stringify(payload) });
+              alert('Книга выдана');
+              issuePanel.classList.add('hidden');
+            } catch (err) { alert('Ошибка при выдаче: ' + ((err && err.payload) ? JSON.stringify(err.payload) : (err.message||JSON.stringify(err)))); }
+          };
+        } else {
+          issuePanel.classList.add('hidden');
+        }
+
+        detailsModal.classList.remove('hidden');
+        detailsModal.scrollIntoView({behavior:'smooth'});
+      } catch (err) {
+        alert('Не удалось загрузить книгу: ' + ((err && err.payload) ? JSON.stringify(err.payload) : (err.message||JSON.stringify(err))));
+      }
+    }
+
+    function openEditBook(b) {
+      editingBookId = b.id;
+      createTitle.textContent = 'Редактировать книгу';
+      panelCreate.classList.remove('hidden');
+      document.getElementById('book-title').value = b.title || '';
+      document.getElementById('book-author').value = b.author || '';
+      document.getElementById('book-genre').value = b.genre || '';
+      document.getElementById('book-year').value = b.year || '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // --- events & auth ---
+    btnLogin.addEventListener('click', () => { modalRegister.classList.add('hidden'); modalLogin.classList.remove('hidden'); });
+    btnRegister.addEventListener('click', () => { modalLogin.classList.add('hidden'); modalRegister.classList.remove('hidden'); });
+    closeLogin.addEventListener('click', () => modalLogin.classList.add('hidden'));
+    closeRegister.addEventListener('click', () => modalRegister.classList.add('hidden'));
+    btnLogout.addEventListener('click', async () => { localStorage.removeItem('jwt_token'); refreshAuthUI(); await updateListsAfterAuthChange(); });
+
+    modalLogin.addEventListener('click', (e) => { if (e.target === modalLogin) modalLogin.classList.add('hidden'); });
+    modalRegister.addEventListener('click', (e) => { if (e.target === modalRegister) modalRegister.classList.add('hidden'); });
+
+    formLogin.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('login-name').value.trim();
+      const pass = document.getElementById('login-pass').value;
+      try {
+        const res = await fetch(API_BASE + '/Auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ Name:name, Password:pass })});
+        if (!res.ok) { const txt = await res.text(); throw new Error(txt || res.statusText); }
+        const json = await res.json();
+        localStorage.setItem('jwt_token', json.token);
+        modalLogin.classList.add('hidden');
+        refreshAuthUI();
+        await updateListsAfterAuthChange();
+      } catch (err) { alert('Ошибка входа: ' + (err.message || JSON.stringify(err))); }
+    });
+
+    formRegister.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('reg-name').value.trim();
+      const pass = document.getElementById('reg-pass').value;
+      const email = document.getElementById('reg-email').value;
+      const role = parseInt(document.getElementById('reg-role').value, 10);
+      try {
+        const res = await fetch(API_BASE + '/Auth/register', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ Name:name, Password:pass, Email:email, Role:role })});
+        if (!res.ok) { const txt = await res.text(); throw new Error(txt || res.statusText); }
+        alert('Успешно зарегистрирован(а). Теперь войдите.');
+        modalRegister.classList.add('hidden');
+      } catch (err) { alert('Ошибка регистрации: ' + (err.message || JSON.stringify(err))); }
+    });
+
+    refreshBtn.addEventListener('click', async () => { await updateListsAfterAuthChange(); });
+    searchInput.addEventListener('input', renderBooks);
+
+    btnShowCreate.addEventListener('click', () => {
+      editingBookId = null; createTitle.textContent = 'Добавить книгу';
+      panelCreate.classList.toggle('hidden'); window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    btnCancelBook.addEventListener('click', () => panelCreate.classList.add('hidden'));
+
+    formBook.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = { Name: document.getElementById('book-title').value.trim(), Author: document.getElementById('book-author').value.trim(), Genre: document.getElementById('book-genre').value.trim(), Year: parseInt(document.getElementById('book-year').value,10) || 0 };
+      try {
+        ///ДОБАВЛЕНИЕЕЕЕЕЕЕЕ
+        if (editingBookId) { await apiFetch(`/api/books/${editingBookId}`, { method:'PUT', body: JSON.stringify(payload) }); alert('Обновлено'); }
+        else { await apiFetch('/api/books', { method:'POST', body: JSON.stringify(payload) }); alert('Книга добавлена'); }
+        panelCreate.classList.add('hidden'); await updateListsAfterAuthChange();
+      } catch (err) { const msg = (err && err.payload) ? (err.payload.title || JSON.stringify(err.payload)) : (err.message || JSON.stringify(err)); alert('Ошибка: ' + msg); }
+    });
+
+    // legacy quick controls (fixed id reference)
+    document.getElementById('btn-issue').addEventListener('click', async () => {
+      const userId = parseInt(document.getElementById('loan-userid').value,10);
+      const copyId = parseInt(document.getElementById('loan-copyid').value,10);
+      if (!userId || !copyId) return alert('Заполните оба поля');
+      try { await apiFetch('/api/loans/issue', { method:'POST', body: JSON.stringify({ UserId:userId, BookCopyId:copyId })}); alert('Книга выдана'); await updateListsAfterAuthChange(); } catch (err) { alert('Ошибка: ' + ((err && err.payload) ? JSON.stringify(err.payload) : (err.message||JSON.stringify(err)))); }
+    });
+
+    document.getElementById('btn-return').addEventListener('click', async () => {
+      const bookId = parseInt(document.getElementById('loan-copyid').value,10);
+      if (!bookId) return alert('Введите ID книги для возврата');
+      try { await apiFetch('/api/loans/return', { method:'POST', body: JSON.stringify({ BookId:bookId })}); alert('Книга возвращена'); await updateListsAfterAuthChange(); } catch (err) { alert('Ошибка: ' + ((err && err.payload) ? JSON.stringify(err.payload) : (err.message||JSON.stringify(err)))); }
+    });
+
+    // helpers
+    function escapeHtml(s) { if (!s && s !== 0) return ''; return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+    // decide which lists to load based on current auth/role
+    async function updateListsAfterAuthChange() {
+      if (hasRole('Reader')) {
+        // reader sees only own books
+        await loadUserBooks();
+      } else {
+        // admin/librarian/anonymous see all books
+        await loadBooks();
+      }
+    }
+
+    // init
+    (async function init(){ refreshAuthUI(); await updateListsAfterAuthChange(); })();
+  </script>
+</body>
+</html>
